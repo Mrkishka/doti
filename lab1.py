@@ -12,6 +12,8 @@ crypto_lib.py
 8. Электронная подпись RSA.
 9. Электронная подпись Эль-Гамаля.
 10. Электронная подпись ГОСТ Р 34.10-94.
+11. Шифр RSA (шифрование файлов).
+12. Шифр Вернама (шифрование файлов, ключ из Диффи-Хеллмана).
 """
 
 import random
@@ -325,10 +327,6 @@ def _hash_file(path):
 # 8. Электронная подпись RSA
 # ----------------------------------------------------------------------
 def rsa_generate_keys(bits=16):
-    """
-    Генерирует ключи RSA: (e, n, d).
-    e — открытая экспонента, d — секретная, n = p*q.
-    """
     p = _random_prime(bits)
     q = _random_prime(bits)
     while p == q:
@@ -351,10 +349,6 @@ def rsa_generate_keys(bits=16):
 
 
 def rsa_sign_file(input_path, sig_path, n, d):
-    """
-    Подписывает файл: читает SHA-256 хеш, каждый байт хеша возводит
-    в степень d по модулю n. Результат сохраняет в отдельный файл.
-    """
     digest = _hash_file(input_path)
     sig = bytearray()
     for b in digest:
@@ -365,9 +359,6 @@ def rsa_sign_file(input_path, sig_path, n, d):
 
 
 def rsa_verify_file(input_path, sig_path, n, e):
-    """
-    Проверяет подпись RSA. Возвращает True, если подпись верна.
-    """
     digest = _hash_file(input_path)
     with open(sig_path, "rb") as f:
         sig = f.read()
@@ -385,17 +376,12 @@ def rsa_verify_file(input_path, sig_path, n, e):
 # 9. Электронная подпись Эль-Гамаля
 # ----------------------------------------------------------------------
 def elgamal_sign_generate_keys(p, g):
-    """
-    Генерирует ключи для подписи Эль-Гамаля: (x, y).
-    x — секретный, y = g^x mod p — открытый.
-    """
     x = random.randint(2, p - 2)
     y = fast_pow(g, x, p)
     return x, y
 
 
 def elgamal_sign_generate_params(bits=16):
-    """Генерирует простое p и первообразный корень g."""
     while True:
         p = random.getrandbits(bits)
         if p < 257 or p % 2 == 0:
@@ -435,12 +421,6 @@ def elgamal_sign_generate_params(bits=16):
 
 
 def elgamal_sign_file(input_path, sig_path, p, g, x):
-    """
-    Подписывает файл: для каждого байта хеша m вычисляет пару (r, s):
-      r = g^k mod p
-      s = (m - x*r) * k^{-1} mod (p-1)
-    где k — случайное, взаимно простое с (p-1).
-    """
     digest = _hash_file(input_path)
     sig = bytearray()
     for m in digest:
@@ -461,10 +441,6 @@ def elgamal_sign_file(input_path, sig_path, p, g, x):
 
 
 def elgamal_verify_file(input_path, sig_path, p, g, y):
-    """
-    Проверяет подпись Эль-Гамаля:
-      y^r * r^s mod p == g^m mod p
-    """
     digest = _hash_file(input_path)
     with open(sig_path, "rb") as f:
         sig = f.read()
@@ -486,16 +462,8 @@ def elgamal_verify_file(input_path, sig_path, p, g, y):
 # 10. Электронная подпись ГОСТ Р 34.10-94
 # ----------------------------------------------------------------------
 def gost_generate_params(bits_q=16):
-    """
-    Генерирует параметры ГОСТ Р 34.10-94:
-      p — простое, q — простой делитель (p-1),
-      a — элемент порядка q по модулю p,
-      x — секретный ключ, y = a^x mod p — открытый.
-    """
-    # 1. Простое q
     q = _random_prime(bits_q)
 
-    # 2. p = k*q + 1 простое
     k = 2
     while True:
         p = k * q + 1
@@ -503,30 +471,22 @@ def gost_generate_params(bits_q=16):
             break
         k += 1
 
-    # 3. a — элемент порядка q
     while True:
         g = random.randint(2, p - 2)
         a = fast_pow(g, (p - 1) // q, p)
         if a != 1:
             break
 
-    # 4. Ключи
     x = random.randint(1, q - 1)
     y = fast_pow(a, x, p)
     return p, q, a, x, y
 
 
 def gost_sign_file(input_path, sig_path, p, q, a, x):
-    """
-    Подписывает файл ГОСТ Р 34.10-94. Для каждого байта хеша m:
-      r = (a^k mod p) mod q
-      s = (x*r + k*m) mod q
-    Если r = 0 или s = 0, генерируем новый k.
-    """
     digest = _hash_file(input_path)
     sig = bytearray()
     for m in digest:
-        m_val = m if m != 0 else 1   # h != 0 mod q
+        m_val = m if m != 0 else 1
         while True:
             k = random.randint(1, q - 1)
             r = fast_pow(a, k, p) % q
@@ -543,14 +503,6 @@ def gost_sign_file(input_path, sig_path, p, q, a, x):
 
 
 def gost_verify_file(input_path, sig_path, p, q, a, y):
-    """
-    Проверяет подпись ГОСТ Р 34.10-94:
-      v  = m^{-1} mod q
-      z1 = s*v mod q
-      z2 = (q - r)*v mod q
-      u  = (a^z1 * y^z2 mod p) mod q
-      подпись верна, если u == r
-    """
     digest = _hash_file(input_path)
     with open(sig_path, "rb") as f:
         sig = f.read()
@@ -570,6 +522,120 @@ def gost_verify_file(input_path, sig_path, p, q, a, y):
         if u != r:
             return False
     return True
+
+
+# ----------------------------------------------------------------------
+# 11. Шифр RSA (шифрование файлов)
+# ----------------------------------------------------------------------
+def rsa_generate_keys_enc(bits=16):
+    p = _random_prime(bits)
+    q = _random_prime(bits)
+    while p == q:
+        q = _random_prime(bits)
+    n = p * q
+    phi = (p - 1) * (q - 1)
+
+    e = 65537
+    if e >= phi or math.gcd(e, phi) != 1:
+        e = 3
+        while math.gcd(e, phi) != 1:
+            e += 2
+
+    _, d, _ = extended_gcd(e, phi)
+    d %= phi
+    if d < 0:
+        d += phi
+
+    return p, q, e, n, d
+
+
+def rsa_encrypt_file_enc(input_path, output_path, e, n):
+    with open(input_path, "rb") as f:
+        data = f.read()
+
+    output = bytearray()
+    for m in data:
+        c = fast_pow(m, e, n)
+        output += c.to_bytes(4, "big")
+
+    with open(output_path, "wb") as f:
+        f.write(output)
+
+
+def rsa_decrypt_file_enc(input_path, output_path, d, n):
+    with open(input_path, "rb") as f:
+        data = f.read()
+
+    if len(data) % 4 != 0:
+        raise ValueError("Некорректный формат зашифрованного файла")
+
+    output = bytearray()
+    for i in range(0, len(data), 4):
+        c = int.from_bytes(data[i:i+4], "big")
+        m = fast_pow(c, d, n)
+        if m > 255:
+            raise ValueError(f"Расшифрованный байт вне диапазона: {m}")
+        output.append(m)
+
+    with open(output_path, "wb") as f:
+        f.write(output)
+
+
+# ----------------------------------------------------------------------
+# 12. Шифр Вернама
+# ----------------------------------------------------------------------
+def vernam_encrypt_file(input_path, output_path, key):
+    with open(input_path, "rb") as f:
+        data = f.read()
+
+    if len(key) < len(data):
+        raise ValueError("Ключ короче файла! Нужен ключ той же длины.")
+
+    output = bytes(m ^ k for m, k in zip(data, key))
+
+    with open(output_path, "wb") as f:
+        f.write(output)
+
+
+def vernam_decrypt_file(input_path, output_path, key):
+    with open(input_path, "rb") as f:
+        data = f.read()
+
+    if len(key) < len(data):
+        raise ValueError("Ключ короче файла!")
+
+    output = bytes(c ^ k for c, k in zip(data, key))
+
+    with open(output_path, "wb") as f:
+        f.write(output)
+
+
+def vernam_generate_key_via_dh(input_path, bits=16):
+    file_size = os.path.getsize(input_path)
+
+    p, g, x_a, x_b = generate_diffie_hellman_instance(bits)
+    res = diffie_hellman(p, g, x_a, x_b)
+    shared = res["shared_key"]
+
+    key = bytearray()
+    counter = 0
+    while len(key) < file_size:
+        h = hashlib.sha256(f"{shared}:{counter}".encode()).digest()
+        key += h
+        counter += 1
+    key = bytes(key[:file_size])
+
+    return key, res
+
+
+def vernam_generate_key_from_shared(shared, length):
+    key = bytearray()
+    counter = 0
+    while len(key) < length:
+        h = hashlib.sha256(f"{shared}:{counter}".encode()).digest()
+        key += h
+        counter += 1
+    return bytes(key[:length])
 
 
 # ----------------------------------------------------------------------
@@ -627,7 +693,9 @@ def main():
     print("8. Подпись RSA")
     print("9. Подпись Эль-Гамаля")
     print("10. Подпись ГОСТ Р 34.10-94")
-    choice = input("Ваш выбор (1-10): ").strip()
+    print("11. Шифр RSA (шифрование файлов)")
+    print("12. Шифр Вернама (шифрование файлов)")
+    choice = input("Ваш выбор (1-12): ").strip()
 
     if choice == "1":
         print("1. Ввести a, b, p вручную")
@@ -770,6 +838,112 @@ def main():
             sig = input("Файл подписи: ").strip()
             ok = gost_verify_file(inp, sig, p, q, a, y)
             print("Подпись верна" if ok else "Подпись неверна")
+
+    # ---------- Пункт 11: RSA — шифрование ----------
+    elif choice == "11":
+        print("Режимы:")
+        print("1. Ввести p, q, D вручную")
+        print("2. Сгенерировать p, q, e, n, d автоматически")
+        mode = input("Выбор (1-2): ").strip()
+
+        if mode == "1":
+            p = int(input("p = "))
+            q = int(input("q = "))
+            d = int(input("D (секретная экспонента) = "))
+            n = p * q
+            phi = (p - 1) * (q - 1)
+            _, e, _ = extended_gcd(d, phi)
+            e %= phi
+            if e < 0:
+                e += phi
+            print(f"n = {n}")
+            print(f"e (открытая экспонента) = {e}")
+            print(f"d (секретная) = {d}")
+
+        elif mode == "2":
+            p, q, e, n, d = rsa_generate_keys_enc()
+            print(f"p = {p}")
+            print(f"q = {q}")
+            print(f"n = {n}")
+            print(f"e (открытая) = {e}")
+            print(f"d (секретная) = {d}")
+        else:
+            print("Неверный выбор")
+            return
+
+        # Сразу после получения ключей — выбор действия
+        print("\nЧто сделать с этими ключами?")
+        print("1. Зашифровать файл (нужен открытый ключ e, n)")
+        print("2. Расшифровать файл (нужен секретный ключ d, n)")
+        print("3. Ничего (просто сохранить ключи)")
+        action = input("Выбор (1-3): ").strip()
+
+        if action == "1":
+            inp = input("Исходный файл: ").strip()
+            out = input("Зашифрованный файл: ").strip()
+            rsa_encrypt_file_enc(inp, out, e, n)
+            print("Файл зашифрован.")
+
+            # Предложим сразу расшифровать
+            again = input("Расшифровать сейчас? (y/n): ").strip().lower()
+            if again == "y":
+                out2 = input("Куда расшифровать: ").strip()
+                rsa_decrypt_file_enc(out, out2, d, n)
+                print("Файл расшифрован.")
+
+        elif action == "2":
+            inp = input("Зашифрованный файл: ").strip()
+            out = input("Расшифрованный файл: ").strip()
+            rsa_decrypt_file_enc(inp, out, d, n)
+            print("Файл расшифрован.")
+
+        elif action == "3":
+            print("Ключи сохранены. Ничего не делаем.")
+
+    # ---------- Пункт 12: Вернам — шифрование ----------
+    elif choice == "12":
+        print("Режимы:")
+        print("1. Сгенерировать ключ через Диффи-Хеллман и зашифровать")
+        print("2. Зашифровать с готовым ключом (общий секрет DH)")
+        print("3. Расшифровать (общий секрет DH)")
+        mode = input("Выбор (1-3): ").strip()
+
+        if mode == "1":
+            inp = input("Исходный файл: ").strip()
+            out = input("Зашифрованный файл: ").strip()
+            key, res = vernam_generate_key_via_dh(inp)
+            print(f"p = {res['p']}")
+            print(f"g = {res['g']}")
+            print(f"Общий секрет = {res['shared_key']}")
+            vernam_encrypt_file(inp, out, key)
+            print("Файл зашифрован. Для расшифрования нужен общий секрет.")
+
+            # Предложим сразу расшифровать
+            again = input("Расшифровать сейчас? (y/n): ").strip().lower()
+            if again == "y":
+                out2 = input("Куда расшифровать: ").strip()
+                size = os.path.getsize(out)
+                key2 = vernam_generate_key_from_shared(res['shared_key'], size)
+                vernam_decrypt_file(out, out2, key2)
+                print("Файл расшифрован.")
+
+        elif mode == "2":
+            inp = input("Исходный файл: ").strip()
+            out = input("Зашифрованный файл: ").strip()
+            shared = int(input("Общий секрет Диффи-Хеллмана = "))
+            size = os.path.getsize(inp)
+            key = vernam_generate_key_from_shared(shared, size)
+            vernam_encrypt_file(inp, out, key)
+            print("Файл зашифрован.")
+
+        elif mode == "3":
+            inp = input("Зашифрованный файл: ").strip()
+            out = input("Расшифрованный файл: ").strip()
+            shared = int(input("Общий секрет Диффи-Хеллмана = "))
+            size = os.path.getsize(inp)
+            key = vernam_generate_key_from_shared(shared, size)
+            vernam_decrypt_file(inp, out, key)
+            print("Файл расшифрован.")
 
     else:
         print("Неверный выбор")
