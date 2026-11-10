@@ -1,19 +1,19 @@
 """
-crypto_lib.py
+lab1.py — криптографическая библиотека (вариант с исправленным DSA)
 
-Криптографическая библиотека:
 1. Быстрое возведение в степень по модулю.
 2. Тест простоты Ферма.
 3. Обобщённый алгоритм Евклида.
-4. Дискретный логарифм (шаг младенца, шаг великана).
+4. Дискретный логарифм.
 5. Протокол Диффи-Хеллмана.
 6. Шифр Шамира.
 7. Шифр Эль-Гамаля.
-8. Электронная подпись RSA.
-9. Электронная подпись Эль-Гамаля.
-10. Электронная подпись ГОСТ Р 34.10-94.
+8. Подпись RSA.
+9. Подпись Эль-Гамаля.
+10. Подпись ГОСТ Р 34.10-94.
 11. Шифр RSA (шифрование файлов).
-12. Шифр Вернама (шифрование файлов, ключ из Диффи-Хеллмана).
+12. Шифр Вернама.
+13. Подпись FIPS 186 (DSA).
 """
 
 import random
@@ -22,9 +22,7 @@ import os
 import hashlib
 
 
-# ----------------------------------------------------------------------
 # 1. Быстрое возведение в степень по модулю
-# ----------------------------------------------------------------------
 def fast_pow(base, exp, mod):
     if mod <= 0:
         raise ValueError("Модуль должен быть положительным")
@@ -38,9 +36,7 @@ def fast_pow(base, exp, mod):
     return result
 
 
-# ----------------------------------------------------------------------
 # 2. Тест простоты Ферма
-# ----------------------------------------------------------------------
 def fermat_primality_test(n, k=5):
     if n < 2:
         return False
@@ -55,9 +51,7 @@ def fermat_primality_test(n, k=5):
     return True
 
 
-# ----------------------------------------------------------------------
 # 3. Обобщённый алгоритм Евклида
-# ----------------------------------------------------------------------
 def extended_gcd(a, b):
     if a == 0 and b == 0:
         raise ValueError("НОД(0,0) не определён")
@@ -76,9 +70,7 @@ def extended_gcd(a, b):
     return old_r, old_s, old_t
 
 
-# ----------------------------------------------------------------------
 # 4. Дискретный логарифм
-# ----------------------------------------------------------------------
 def baby_step_giant_step(a, y, p):
     a %= p
     y %= p
@@ -108,9 +100,7 @@ def baby_step_giant_step(a, y, p):
     return None
 
 
-# ----------------------------------------------------------------------
-# 5. Протокол Диффи-Хеллмана
-# ----------------------------------------------------------------------
+# 5. Диффи-Хеллман
 def diffie_hellman(p, g, x_a, x_b):
     y_a = fast_pow(g, x_a, p)
     y_b = fast_pow(g, x_b, p)
@@ -161,9 +151,7 @@ def generate_diffie_hellman_instance(bits=16):
     return p, g, x_a, x_b
 
 
-# ----------------------------------------------------------------------
 # 6. Шифр Шамира
-# ----------------------------------------------------------------------
 def shamir_generate_keys(p):
     while True:
         c = random.randint(2, p - 2)
@@ -215,9 +203,7 @@ def shamir_full_cycle(input_path, output_path, p, c_a, d_a, c_b, d_b):
         f.write(step4)
 
 
-# ----------------------------------------------------------------------
 # 7. Шифр Эль-Гамаля
-# ----------------------------------------------------------------------
 def elgamal_generate_keys(p, g):
     c = random.randint(2, p - 2)
     d = fast_pow(g, c, p)
@@ -281,7 +267,7 @@ def elgamal_decrypt_file(input_path, output_path, p, c):
     with open(input_path, "rb") as f:
         data = f.read()
     if len(data) % 8 != 0:
-        raise ValueError("Некорректный формат зашифрованного файла")
+        raise ValueError("Некорректный формат")
     output = bytearray()
     for i in range(0, len(data), 8):
         a = int.from_bytes(data[i:i+4], "big")
@@ -289,7 +275,7 @@ def elgamal_decrypt_file(input_path, output_path, p, c):
         a_c = fast_pow(a, c, p)
         gcd, inv, _ = extended_gcd(a_c, p)
         if gcd != 1:
-            raise ValueError("Не удалось вычислить обратный элемент")
+            raise ValueError("Нет обратного")
         inv %= p
         m = (b * inv) % p
         if m > 255:
@@ -299,11 +285,8 @@ def elgamal_decrypt_file(input_path, output_path, p, c):
         f.write(output)
 
 
-# ----------------------------------------------------------------------
-# Вспомогательные функции для подписи
-# ----------------------------------------------------------------------
+# Вспомогательные
 def _random_prime(bits=16):
-    """Генерирует случайное простое число заданной битности."""
     while True:
         candidate = random.getrandbits(bits)
         if candidate < 3:
@@ -315,7 +298,6 @@ def _random_prime(bits=16):
 
 
 def _hash_file(path):
-    """Возвращает SHA-256 хеш файла (32 байта)."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
@@ -323,9 +305,7 @@ def _hash_file(path):
     return h.digest()
 
 
-# ----------------------------------------------------------------------
-# 8. Электронная подпись RSA
-# ----------------------------------------------------------------------
+# 8. Подпись RSA
 def rsa_generate_keys(bits=16):
     p = _random_prime(bits)
     q = _random_prime(bits)
@@ -366,15 +346,12 @@ def rsa_verify_file(input_path, sig_path, n, e):
         return False
     for i, b in enumerate(digest):
         s = int.from_bytes(sig[i*4:(i+1)*4], "big")
-        m = fast_pow(s, e, n)
-        if m != b:
+        if fast_pow(s, e, n) != b:
             return False
     return True
 
 
-# ----------------------------------------------------------------------
-# 9. Электронная подпись Эль-Гамаля
-# ----------------------------------------------------------------------
+# 9. Подпись Эль-Гамаля
 def elgamal_sign_generate_keys(p, g):
     x = random.randint(2, p - 2)
     y = fast_pow(g, x, p)
@@ -452,31 +429,25 @@ def elgamal_verify_file(input_path, sig_path, p, g, y):
         if not (0 < r < p) or not (0 < s < p - 1):
             return False
         lhs = (fast_pow(y, r, p) * fast_pow(r, s, p)) % p
-        rhs = fast_pow(g, m, p)
-        if lhs != rhs:
+        if lhs != fast_pow(g, m, p):
             return False
     return True
 
 
-# ----------------------------------------------------------------------
-# 10. Электронная подпись ГОСТ Р 34.10-94
-# ----------------------------------------------------------------------
+# 10. Подпись ГОСТ Р 34.10-94
 def gost_generate_params(bits_q=16):
     q = _random_prime(bits_q)
-
     k = 2
     while True:
         p = k * q + 1
         if fermat_primality_test(p):
             break
         k += 1
-
     while True:
         g = random.randint(2, p - 2)
         a = fast_pow(g, (p - 1) // q, p)
         if a != 1:
             break
-
     x = random.randint(1, q - 1)
     y = fast_pow(a, x, p)
     return p, q, a, x, y
@@ -493,9 +464,8 @@ def gost_sign_file(input_path, sig_path, p, q, a, x):
             if r == 0:
                 continue
             s = (x * r + k * m_val) % q
-            if s == 0:
-                continue
-            break
+            if s != 0:
+                break
         sig += r.to_bytes(4, "big")
         sig += s.to_bytes(4, "big")
     with open(sig_path, "wb") as f:
@@ -524,9 +494,7 @@ def gost_verify_file(input_path, sig_path, p, q, a, y):
     return True
 
 
-# ----------------------------------------------------------------------
-# 11. Шифр RSA (шифрование файлов)
-# ----------------------------------------------------------------------
+# 11. Шифр RSA
 def rsa_generate_keys_enc(bits=16):
     p = _random_prime(bits)
     q = _random_prime(bits)
@@ -534,30 +502,24 @@ def rsa_generate_keys_enc(bits=16):
         q = _random_prime(bits)
     n = p * q
     phi = (p - 1) * (q - 1)
-
     e = 65537
     if e >= phi or math.gcd(e, phi) != 1:
         e = 3
         while math.gcd(e, phi) != 1:
             e += 2
-
     _, d, _ = extended_gcd(e, phi)
     d %= phi
     if d < 0:
         d += phi
-
     return p, q, e, n, d
 
 
 def rsa_encrypt_file_enc(input_path, output_path, e, n):
     with open(input_path, "rb") as f:
         data = f.read()
-
     output = bytearray()
     for m in data:
-        c = fast_pow(m, e, n)
-        output += c.to_bytes(4, "big")
-
+        output += fast_pow(m, e, n).to_bytes(4, "big")
     with open(output_path, "wb") as f:
         f.write(output)
 
@@ -565,87 +527,178 @@ def rsa_encrypt_file_enc(input_path, output_path, e, n):
 def rsa_decrypt_file_enc(input_path, output_path, d, n):
     with open(input_path, "rb") as f:
         data = f.read()
-
     if len(data) % 4 != 0:
-        raise ValueError("Некорректный формат зашифрованного файла")
-
+        raise ValueError("Некорректный формат")
     output = bytearray()
     for i in range(0, len(data), 4):
         c = int.from_bytes(data[i:i+4], "big")
         m = fast_pow(c, d, n)
         if m > 255:
-            raise ValueError(f"Расшифрованный байт вне диапазона: {m}")
+            raise ValueError(f"Байт вне диапазона: {m}")
         output.append(m)
-
     with open(output_path, "wb") as f:
         f.write(output)
 
 
-# ----------------------------------------------------------------------
 # 12. Шифр Вернама
-# ----------------------------------------------------------------------
 def vernam_encrypt_file(input_path, output_path, key):
     with open(input_path, "rb") as f:
         data = f.read()
-
     if len(key) < len(data):
-        raise ValueError("Ключ короче файла! Нужен ключ той же длины.")
-
-    output = bytes(m ^ k for m, k in zip(data, key))
-
+        raise ValueError("Ключ короче файла!")
     with open(output_path, "wb") as f:
-        f.write(output)
+        f.write(bytes(m ^ k for m, k in zip(data, key)))
 
 
 def vernam_decrypt_file(input_path, output_path, key):
     with open(input_path, "rb") as f:
         data = f.read()
-
     if len(key) < len(data):
         raise ValueError("Ключ короче файла!")
-
-    output = bytes(c ^ k for c, k in zip(data, key))
-
     with open(output_path, "wb") as f:
-        f.write(output)
+        f.write(bytes(c ^ k for c, k in zip(data, key)))
 
 
 def vernam_generate_key_via_dh(input_path, bits=16):
     file_size = os.path.getsize(input_path)
-
     p, g, x_a, x_b = generate_diffie_hellman_instance(bits)
     res = diffie_hellman(p, g, x_a, x_b)
     shared = res["shared_key"]
-
     key = bytearray()
     counter = 0
     while len(key) < file_size:
-        h = hashlib.sha256(f"{shared}:{counter}".encode()).digest()
-        key += h
+        key += hashlib.sha256(f"{shared}:{counter}".encode()).digest()
         counter += 1
-    key = bytes(key[:file_size])
-
-    return key, res
+    return bytes(key[:file_size]), res
 
 
 def vernam_generate_key_from_shared(shared, length):
     key = bytearray()
     counter = 0
     while len(key) < length:
-        h = hashlib.sha256(f"{shared}:{counter}".encode()).digest()
-        key += h
+        key += hashlib.sha256(f"{shared}:{counter}".encode()).digest()
         counter += 1
     return bytes(key[:length])
 
 
+# ======================================================================
+# 13. DSA (FIPS 186) — ИСПРАВЛЕННАЯ генерация параметров
+# ======================================================================
+def dsa_generate_params(L=32, N=16):
+    """
+    Генерирует параметры DSA (p, q, g):
+      q — простое битности N (нечётное),
+      p — простое битности L, p = k*q + 1,
+      g — элемент порядка q по модулю p.
+
+    Ключевой момент: q нечётное ⇒ для того чтобы p = k*q + 1 было
+    нечётным (а значит, могло быть простым), k должно быть ЧЁТНЫМ.
+    """
+    # 1. Простое q битности N
+    while True:
+        q = random.getrandbits(N)
+        q |= (1 << (N - 1)) | 1
+        if fermat_primality_test(q):
+            break
+
+    # 2. Простое p = k*q + 1 битности L
+    while True:
+        low_k = ((1 << (L - 1)) - 1) // q + 1
+        high_k = ((1 << L) - 1) // q
+
+        if low_k > high_k:
+            # q слишком велико для L бит — генерируем q поменьше
+            while True:
+                q = random.getrandbits(N - 1) | (1 << (N - 2)) | 1
+                if fermat_primality_test(q):
+                    break
+            continue
+
+        # k должно быть ЧЁТНЫМ: q нечётное, k*q должно быть чётным,
+        # чтобы p = k*q + 1 было нечётным и могло быть простым
+        low_k_even = low_k if low_k % 2 == 0 else low_k + 1
+        high_k_even = high_k if high_k % 2 == 0 else high_k - 1
+
+        if low_k_even > high_k_even:
+            # в диапазоне нет чётного k — генерируем q поменьше
+            while True:
+                q = random.getrandbits(N - 1) | (1 << (N - 2)) | 1
+                if fermat_primality_test(q):
+                    break
+            continue
+
+        k = random.randint(low_k_even // 2, high_k_even // 2) * 2
+        p = k * q + 1
+
+        if p.bit_length() == L and fermat_primality_test(p):
+            break
+
+    # 3. g — элемент порядка q по модулю p
+    while True:
+        h = random.randint(2, p - 2)
+        g = fast_pow(h, (p - 1) // q, p)
+        if g > 1:
+            break
+
+    return p, q, g
+
+
+def dsa_generate_keys(p, q, g):
+    x = random.randint(1, q - 1)
+    y = fast_pow(g, x, p)
+    return x, y
+
+
+def dsa_sign_file(input_path, sig_path, p, q, g, x):
+    digest = _hash_file(input_path)
+    sig = bytearray()
+    for h in digest:
+        h_val = h if h != 0 else 1
+        while True:
+            k = random.randint(1, q - 1)
+            r = fast_pow(g, k, p) % q
+            if r == 0:
+                continue
+            _, k_inv, _ = extended_gcd(k, q)
+            k_inv %= q
+            s = (k_inv * (h_val + x * r)) % q
+            if s != 0:
+                break
+        sig += r.to_bytes(4, "big")
+        sig += s.to_bytes(4, "big")
+    with open(sig_path, "wb") as f:
+        f.write(sig)
+
+
+def dsa_verify_file(input_path, sig_path, p, q, g, y):
+    digest = _hash_file(input_path)
+    with open(sig_path, "rb") as f:
+        sig = f.read()
+    if len(sig) != len(digest) * 8:
+        return False
+    for i, h in enumerate(digest):
+        h_val = h if h != 0 else 1
+        r = int.from_bytes(sig[i*8:i*8+4], "big")
+        s = int.from_bytes(sig[i*8+4:i*8+8], "big")
+        if not (0 < r < q) or not (0 < s < q):
+            return False
+        _, w, _ = extended_gcd(s, q)
+        w %= q
+        u1 = (h_val * w) % q
+        u2 = (r * w) % q
+        v = ((fast_pow(g, u1, p) * fast_pow(y, u2, p)) % p) % q
+        if v != r:
+            return False
+    return True
+
+
 # ----------------------------------------------------------------------
-# Вспомогательные функции (ввод, генерация)
+# Вспомогательные функции ввода
 # ----------------------------------------------------------------------
 def input_pair(prompt="Введите два целых числа через пробел: "):
     while True:
         try:
-            s = input(prompt)
-            a_str, b_str = s.split()
+            a_str, b_str = input(prompt).split()
             return int(a_str), int(b_str)
         except (ValueError, IndexError):
             print("Ошибка ввода. Попробуйте ещё раз.")
@@ -674,12 +727,11 @@ def generate_dlp_instance(bits=16):
             break
     a = random.randint(2, p - 2)
     x = random.randint(1, p - 2)
-    y = fast_pow(a, x, p)
-    return a, y, p, x
+    return a, fast_pow(a, x, p), p, x
 
 
 # ----------------------------------------------------------------------
-# Интерактивное меню
+# Меню
 # ----------------------------------------------------------------------
 def main():
     print("Криптографическая библиотека")
@@ -695,16 +747,15 @@ def main():
     print("10. Подпись ГОСТ Р 34.10-94")
     print("11. Шифр RSA (шифрование файлов)")
     print("12. Шифр Вернама (шифрование файлов)")
-    choice = input("Ваш выбор (1-12): ").strip()
+    print("13. Подпись FIPS 186 (DSA)")
+    choice = input("Ваш выбор (1-13): ").strip()
 
     if choice == "1":
-        print("1. Ввести a, b, p вручную")
-        print("2. Сгенерировать случайно")
-        print("3. Сгенерировать простыми")
+        print("1. Ввести вручную\n2. Сгенерировать случайно\n3. Сгенерировать простыми")
         src = input("Источник (1-3): ").strip()
         if src == "1":
             a, b = input_pair("Введите a и b: ")
-            p = int(input("Введите модуль p: "))
+            p = int(input("Модуль p = "))
         elif src == "2":
             a, b = generate_random_pair()
             p = random.getrandbits(16) + 2
@@ -712,7 +763,7 @@ def main():
         elif src == "3":
             a, b = generate_prime_pair()
             p = random.getrandbits(16) + 2
-            print(f"a={a} (простое), b={b} (простое), p={p}")
+            print(f"a={a}, b={b}, p={p}")
         else:
             return
         print(f"Результат: {fast_pow(a, b, p)}")
@@ -732,19 +783,16 @@ def main():
         y = int(input("y = "))
         p = int(input("p = "))
         x = baby_step_giant_step(a, y, p)
-        print(f"Найденный x = {x}" if x is not None else "Решение не найдено")
+        print(f"x = {x}" if x is not None else "Решение не найдено")
 
     elif choice == "5":
         p, g, x_a, x_b = generate_diffie_hellman_instance()
-        print(f"p={p}, g={g}, X_A={x_a}, X_B={x_b}")
         res = diffie_hellman(p, g, x_a, x_b)
-        print(f"Y_A = {res['y_a']}, Y_B = {res['y_b']}")
-        print(f"Общий ключ: K = {res['shared_key']}")
+        print(f"p={p}, g={g}, X_A={x_a}, X_B={x_b}")
+        print(f"Y_A={res['y_a']}, Y_B={res['y_b']}, K={res['shared_key']}")
 
     elif choice == "6":
-        print("1. Полный цикл (A→B→A⁻¹→B⁻¹)")
-        print("2. Зашифровать ключом C")
-        print("3. Расшифровать ключом D")
+        print("1. Полный цикл\n2. Зашифровать C\n3. Расшифровать D")
         mode = input("Выбор (1-3): ").strip()
         if mode == "1":
             while True:
@@ -753,197 +801,165 @@ def main():
                     break
             c_a, d_a = shamir_generate_keys(p)
             c_b, d_b = shamir_generate_keys(p)
-            print(f"p={p}, A: C_A={c_a}, D_A={d_a}, B: C_B={c_b}, D_B={d_b}")
-            inp = input("Исходный файл: ").strip()
-            out = input("Выходной файл: ").strip()
-            shamir_full_cycle(inp, out, p, c_a, d_a, c_b, d_b)
+            print(f"p={p}, C_A={c_a}, D_A={d_a}, C_B={c_b}, D_B={d_b}")
+            shamir_full_cycle(input("Исходный файл: ").strip(),
+                              input("Выходной файл: ").strip(),
+                              p, c_a, d_a, c_b, d_b)
             print("Готово.")
         elif mode == "2":
             p = int(input("p = "))
             c = int(input("C = "))
-            inp = input("Исходный файл: ").strip()
-            out = input("Выходной файл: ").strip()
-            shamir_encrypt_file(inp, out, p, c, c, mode="a")
+            shamir_encrypt_file(input("Исходный: ").strip(),
+                                input("Выходной: ").strip(),
+                                p, c, c, mode="a")
         elif mode == "3":
             p = int(input("p = "))
             d = int(input("D = "))
-            inp = input("Зашифрованный файл: ").strip()
-            out = input("Выходной файл: ").strip()
-            shamir_decrypt_file(inp, out, p, d)
+            shamir_decrypt_file(input("Зашифрованный: ").strip(),
+                                input("Выходной: ").strip(), p, d)
 
     elif choice == "7":
         p, g, c, d = elgamal_generate_instance()
         print(f"p={p}, g={g}, C={c}, D={d}")
-        inp = input("Исходный файл: ").strip()
-        out = input("Выходной (зашифрованный) файл: ").strip()
-        elgamal_encrypt_file(inp, out, p, g, d)
-        print("Файл зашифрован. Для расшифрования нужен C.")
+        elgamal_encrypt_file(input("Исходный: ").strip(),
+                             input("Зашифрованный: ").strip(), p, g, d)
+        print("Зашифровано. Для расшифрования нужен C.")
 
     elif choice == "8":
-        print("1. Сгенерировать ключи и подписать файл")
-        print("2. Проверить подпись")
+        print("1. Подписать\n2. Проверить")
         mode = input("Выбор (1-2): ").strip()
         if mode == "1":
             e, n, d = rsa_generate_keys()
-            print(f"e = {e}\nn = {n}\nd = {d}")
-            inp = input("Файл для подписи: ").strip()
-            sig = input("Файл подписи: ").strip()
-            rsa_sign_file(inp, sig, n, d)
-            print("Файл подписан.")
+            print(f"e={e}\nn={n}\nd={d}")
+            rsa_sign_file(input("Файл: ").strip(),
+                          input("Подпись: ").strip(), n, d)
+            print("Подписано.")
         elif mode == "2":
             n = int(input("n = "))
             e = int(input("e = "))
-            inp = input("Файл: ").strip()
-            sig = input("Файл подписи: ").strip()
-            ok = rsa_verify_file(inp, sig, n, e)
-            print("Подпись верна" if ok else "Подпись неверна")
+            ok = rsa_verify_file(input("Файл: ").strip(),
+                                 input("Подпись: ").strip(), n, e)
+            print("Верна" if ok else "Неверна")
 
     elif choice == "9":
-        print("1. Сгенерировать параметры и подписать файл")
-        print("2. Проверить подпись")
+        print("1. Подписать\n2. Проверить")
         mode = input("Выбор (1-2): ").strip()
         if mode == "1":
             p, g, x, y = elgamal_sign_generate_params()
-            print(f"p = {p}\ng = {g}\nx = {x}\ny = {y}")
-            inp = input("Файл для подписи: ").strip()
-            sig = input("Файл подписи: ").strip()
-            elgamal_sign_file(inp, sig, p, g, x)
-            print("Файл подписан.")
+            print(f"p={p}, g={g}, x={x}, y={y}")
+            elgamal_sign_file(input("Файл: ").strip(),
+                              input("Подпись: ").strip(), p, g, x)
+            print("Подписано.")
         elif mode == "2":
             p = int(input("p = "))
             g = int(input("g = "))
             y = int(input("y = "))
-            inp = input("Файл: ").strip()
-            sig = input("Файл подписи: ").strip()
-            ok = elgamal_verify_file(inp, sig, p, g, y)
-            print("Подпись верна" if ok else "Подпись неверна")
+            ok = elgamal_verify_file(input("Файл: ").strip(),
+                                     input("Подпись: ").strip(), p, g, y)
+            print("Верна" if ok else "Неверна")
 
     elif choice == "10":
-        print("1. Сгенерировать параметры и подписать файл")
-        print("2. Проверить подпись")
+        print("1. Подписать\n2. Проверить")
         mode = input("Выбор (1-2): ").strip()
         if mode == "1":
             p, q, a, x, y = gost_generate_params()
-            print(f"p = {p}\nq = {q}\na = {a}\nx = {x}\ny = {y}")
-            inp = input("Файл для подписи: ").strip()
-            sig = input("Файл подписи: ").strip()
-            gost_sign_file(inp, sig, p, q, a, x)
-            print("Файл подписан.")
+            print(f"p={p}, q={q}, a={a}, x={x}, y={y}")
+            gost_sign_file(input("Файл: ").strip(),
+                           input("Подпись: ").strip(), p, q, a, x)
+            print("Подписано.")
         elif mode == "2":
             p = int(input("p = "))
             q = int(input("q = "))
             a = int(input("a = "))
             y = int(input("y = "))
-            inp = input("Файл: ").strip()
-            sig = input("Файл подписи: ").strip()
-            ok = gost_verify_file(inp, sig, p, q, a, y)
-            print("Подпись верна" if ok else "Подпись неверна")
+            ok = gost_verify_file(input("Файл: ").strip(),
+                                  input("Подпись: ").strip(), p, q, a, y)
+            print("Верна" if ok else "Неверна")
 
-    # ---------- Пункт 11: RSA — шифрование ----------
     elif choice == "11":
-        print("Режимы:")
-        print("1. Ввести p, q, D вручную")
-        print("2. Сгенерировать p, q, e, n, d автоматически")
+        print("1. Ввести p, q, D вручную\n2. Сгенерировать")
         mode = input("Выбор (1-2): ").strip()
-
         if mode == "1":
             p = int(input("p = "))
             q = int(input("q = "))
-            d = int(input("D (секретная экспонента) = "))
+            d = int(input("D = "))
             n = p * q
             phi = (p - 1) * (q - 1)
             _, e, _ = extended_gcd(d, phi)
             e %= phi
             if e < 0:
                 e += phi
-            print(f"n = {n}")
-            print(f"e (открытая экспонента) = {e}")
-            print(f"d (секретная) = {d}")
-
+            print(f"n={n}, e={e}, d={d}")
         elif mode == "2":
             p, q, e, n, d = rsa_generate_keys_enc()
-            print(f"p = {p}")
-            print(f"q = {q}")
-            print(f"n = {n}")
-            print(f"e (открытая) = {e}")
-            print(f"d (секретная) = {d}")
+            print(f"p={p}\nq={q}\nn={n}\ne={e}\nd={d}")
         else:
-            print("Неверный выбор")
             return
 
-        # Сразу после получения ключей — выбор действия
-        print("\nЧто сделать с этими ключами?")
-        print("1. Зашифровать файл (нужен открытый ключ e, n)")
-        print("2. Расшифровать файл (нужен секретный ключ d, n)")
-        print("3. Ничего (просто сохранить ключи)")
-        action = input("Выбор (1-3): ").strip()
-
+        print("1. Зашифровать\n2. Расшифровать\n3. Ничего")
+        action = input("Действие (1-3): ").strip()
         if action == "1":
-            inp = input("Исходный файл: ").strip()
             out = input("Зашифрованный файл: ").strip()
-            rsa_encrypt_file_enc(inp, out, e, n)
-            print("Файл зашифрован.")
-
-            # Предложим сразу расшифровать
-            again = input("Расшифровать сейчас? (y/n): ").strip().lower()
-            if again == "y":
-                out2 = input("Куда расшифровать: ").strip()
-                rsa_decrypt_file_enc(out, out2, d, n)
-                print("Файл расшифрован.")
-
+            rsa_encrypt_file_enc(input("Исходный файл: ").strip(), out, e, n)
+            print("Зашифровано.")
+            if input("Расшифровать? (y/n): ").strip().lower() == "y":
+                rsa_decrypt_file_enc(out, input("Куда: ").strip(), d, n)
+                print("Расшифровано.")
         elif action == "2":
-            inp = input("Зашифрованный файл: ").strip()
-            out = input("Расшифрованный файл: ").strip()
-            rsa_decrypt_file_enc(inp, out, d, n)
-            print("Файл расшифрован.")
+            rsa_decrypt_file_enc(input("Зашифрованный: ").strip(),
+                                 input("Куда: ").strip(), d, n)
+            print("Расшифровано.")
 
-        elif action == "3":
-            print("Ключи сохранены. Ничего не делаем.")
-
-    # ---------- Пункт 12: Вернам — шифрование ----------
     elif choice == "12":
-        print("Режимы:")
-        print("1. Сгенерировать ключ через Диффи-Хеллман и зашифровать")
-        print("2. Зашифровать с готовым ключом (общий секрет DH)")
-        print("3. Расшифровать (общий секрет DH)")
+        print("1. Через DH и зашифровать\n2. Зашифровать\n3. Расшифровать")
         mode = input("Выбор (1-3): ").strip()
-
         if mode == "1":
-            inp = input("Исходный файл: ").strip()
-            out = input("Зашифрованный файл: ").strip()
+            inp = input("Исходный: ").strip()
+            out = input("Зашифрованный: ").strip()
             key, res = vernam_generate_key_via_dh(inp)
-            print(f"p = {res['p']}")
-            print(f"g = {res['g']}")
-            print(f"Общий секрет = {res['shared_key']}")
+            print(f"p={res['p']}, g={res['g']}, K={res['shared_key']}")
             vernam_encrypt_file(inp, out, key)
-            print("Файл зашифрован. Для расшифрования нужен общий секрет.")
-
-            # Предложим сразу расшифровать
-            again = input("Расшифровать сейчас? (y/n): ").strip().lower()
-            if again == "y":
-                out2 = input("Куда расшифровать: ").strip()
+            print("Зашифровано.")
+            if input("Расшифровать? (y/n): ").strip().lower() == "y":
                 size = os.path.getsize(out)
                 key2 = vernam_generate_key_from_shared(res['shared_key'], size)
-                vernam_decrypt_file(out, out2, key2)
-                print("Файл расшифрован.")
-
+                vernam_decrypt_file(out, input("Куда: ").strip(), key2)
+                print("Расшифровано.")
         elif mode == "2":
-            inp = input("Исходный файл: ").strip()
-            out = input("Зашифрованный файл: ").strip()
-            shared = int(input("Общий секрет Диффи-Хеллмана = "))
-            size = os.path.getsize(inp)
-            key = vernam_generate_key_from_shared(shared, size)
-            vernam_encrypt_file(inp, out, key)
-            print("Файл зашифрован.")
-
+            inp = input("Исходный: ").strip()
+            shared = int(input("Общий секрет: "))
+            key = vernam_generate_key_from_shared(shared, os.path.getsize(inp))
+            vernam_encrypt_file(inp, input("Зашифрованный: ").strip(), key)
+            print("Зашифровано.")
         elif mode == "3":
-            inp = input("Зашифрованный файл: ").strip()
-            out = input("Расшифрованный файл: ").strip()
-            shared = int(input("Общий секрет Диффи-Хеллмана = "))
-            size = os.path.getsize(inp)
-            key = vernam_generate_key_from_shared(shared, size)
-            vernam_decrypt_file(inp, out, key)
-            print("Файл расшифрован.")
+            inp = input("Зашифрованный: ").strip()
+            shared = int(input("Общий секрет: "))
+            key = vernam_generate_key_from_shared(shared, os.path.getsize(inp))
+            vernam_decrypt_file(inp, input("Куда: ").strip(), key)
+            print("Расшифровано.")
+
+    elif choice == "13":
+        print("1. Сгенерировать и подписать\n2. Проверить")
+        mode = input("Выбор (1-2): ").strip()
+        if mode == "1":
+            p, q, g = dsa_generate_params()
+            x, y = dsa_generate_keys(p, q, g)
+            print(f"p = {p}")
+            print(f"q = {q}")
+            print(f"g = {g}")
+            print(f"x = {x}")
+            print(f"y = {y}")
+            dsa_sign_file(input("Файл: ").strip(),
+                          input("Подпись: ").strip(), p, q, g, x)
+            print("Подписано.")
+        elif mode == "2":
+            p = int(input("p = "))
+            q = int(input("q = "))
+            g = int(input("g = "))
+            y = int(input("y = "))
+            ok = dsa_verify_file(input("Файл: ").strip(),
+                                 input("Подпись: ").strip(), p, q, g, y)
+            print("Верна" if ok else "Неверна")
 
     else:
         print("Неверный выбор")
